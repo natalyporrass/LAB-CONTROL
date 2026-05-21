@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UMNG – Lab 5 Tanques Acoplados</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Bebas+Neue&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f5f0e8;--panel:#ede8de;--panel2:#e8e2d6;--panel3:#dfd9cc;
+  --ink:#1a1209;--ink2:#3d3320;--ink3:#6b5e44;
+  --red:#c0392b;--red2:#e74c3c;
+  --blue:#1a3a5c;--blue2:#2980b9;
+  --orange:#b5470f;--orange2:#e67e22;
+  --green:#1a4a1a;--green2:#27ae60;
+  --border:#8a7a5e;--border2:#b5a88a;--border3:#d4cabc;
+}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-family:'Share Tech Mono',monospace;color:var(--ink);font-size:11px}
+.app{display:grid;grid-template-rows:auto 1fr auto;width:100vw;height:100vh}
+
+/* HEADER */
+.hdr{background:var(--ink);color:#f5f0e8;padding:4px 10px;display:flex;align-items:center;gap:12px;border-bottom:3px solid var(--red)}
+.hdr-title{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:.12em}
+.hdr-sub{font-size:9px;color:#b5a88a;letter-spacing:.06em}
+.hdr-sep{flex:1}
+.hdr-badges{display:flex;gap:5px}
+.hb{font-size:8px;padding:2px 6px;border:1px solid;font-family:'Share Tech Mono',monospace;letter-spacing:.05em;background:#1a1209}
+.hb-r{border-color:var(--red);color:var(--red)}
+.hb-g{border-color:var(--green2);color:var(--green2)}
+.hb-b{border-color:var(--blue2);color:var(--blue2)}
+.hb-o{border-color:var(--orange2);color:var(--orange2)}
+
+/* MAIN GRID */
+.main{display:grid;grid-template-columns:18% 48% 34%;overflow:hidden}
+
+/* LEFT */
+.left{display:flex;flex-direction:column;border-right:2px solid var(--border);background:var(--panel)}
+.left-section{border-bottom:1px solid var(--border3);padding:5px 7px}
+.sec-lbl{font-size:8px;color:var(--ink3);letter-spacing:.1em;border-bottom:1px solid var(--border3);padding-bottom:3px;margin-bottom:4px}
+.cfg-row{display:flex;gap:3px;flex-wrap:wrap}
+.cfg-btn{background:var(--panel2);border:1px solid var(--border);color:var(--ink2);font-family:'Share Tech Mono',monospace;font-size:9px;padding:2px 7px;cursor:pointer}
+.cfg-btn:hover{background:var(--panel3)}
+.cfg-btn.active-r{background:var(--red);border-color:var(--red);color:#fff}
+
+/* broker inputs */
+.inp{width:100%;background:var(--panel2);border:1px solid var(--border2);color:var(--ink);font-family:'Share Tech Mono',monospace;font-size:8px;padding:2px 4px;margin-bottom:3px}
+.inp-row{display:flex;gap:3px}
+.inp-sm{width:50%;background:var(--panel2);border:1px solid var(--border2);color:var(--ink);font-family:'Share Tech Mono',monospace;font-size:8px;padding:2px 4px}
+
+/* metrics */
+.metrics-grid{display:grid;grid-template-columns:1fr 1fr;gap:3px;padding:5px 7px}
+.mtile{background:var(--panel2);border:1px solid var(--border3);padding:3px 5px}
+.mt-lbl{font-size:7px;color:var(--ink3);letter-spacing:.06em}
+.mt-val{font-size:15px;font-weight:700;line-height:1.1}
+.mt-unit{font-size:7px;color:var(--ink3)}
+
+/* sp slider */
+.sp-wrap{padding:5px 7px}
+.sp-row{display:flex;align-items:center;gap:6px}
+.sp-row input[type=range]{flex:1;accent-color:var(--red)}
+.sp-val{color:var(--red2);font-weight:700;font-size:14px;min-width:32px;text-align:right}
+
+/* action buttons */
+.act-grid{display:grid;grid-template-columns:1fr 1fr;gap:3px;padding:5px 7px}
+.abtn{background:var(--panel2);border:1.5px solid var(--border);color:var(--ink);font-family:'Share Tech Mono',monospace;font-size:9px;padding:4px 3px;cursor:pointer;text-align:center}
+.abtn:hover{background:var(--panel3)}
+.ab-g{border-color:var(--green);color:var(--green)}
+.ab-b{border-color:var(--blue);color:var(--blue)}
+
+/* CENTER */
+.center{display:flex;flex-direction:column;border-right:2px solid var(--border)}
+.plot-main{flex:1.4;position:relative;border-bottom:2px solid var(--border);background:var(--bg)}
+.plot-small{flex:1;position:relative;background:var(--bg)}
+.plot-inner{position:absolute;inset:0;padding:2px}
+.plot-title-bar{position:absolute;top:0;left:0;right:0;background:var(--ink);color:#f5f0e8;font-size:8px;padding:2px 6px;letter-spacing:.08em;display:flex;justify-content:space-between;z-index:2}
+.plot-legend{display:flex;gap:8px}
+.leg{display:flex;align-items:center;gap:3px;font-size:7px}
+.leg-line{width:14px;height:2px}
+.tanks-row{display:flex;border-top:2px solid var(--border);height:22%}
+.tank-cell{flex:1;border-right:1px solid var(--border3);position:relative;overflow:hidden}
+.tank-cell:last-child{border-right:none}
+canvas.tc{width:100%;height:100%;display:block}
+
+/* RIGHT */
+.right{display:flex;flex-direction:column;background:var(--panel)}
+.con-wrap{flex:1;display:flex;flex-direction:column;padding:5px 7px;min-height:0}
+.con-title{font-size:8px;color:var(--ink3);letter-spacing:.1em;border-bottom:1px solid var(--border3);padding-bottom:3px;margin-bottom:4px}
+.console-box{background:#f9f5ee;border:1.5px solid var(--border);padding:4px 6px;flex:1;overflow-y:auto;min-height:0;font-size:8px;line-height:1.6;color:var(--ink2)}
+.con-log-info{color:var(--blue2)}
+.con-log-cmd{color:var(--red)}
+.con-log-ok{color:var(--green2)}
+.con-log-warn{color:var(--orange)}
+.ise-row{display:flex;gap:3px;margin-top:3px}
+.ise-box{flex:1;background:var(--panel2);border:1px solid var(--border2);padding:3px 6px;display:flex;justify-content:space-between;align-items:center}
+.ise-lbl{font-size:7px;color:var(--ink3)}
+.ise-val{color:var(--red2);font-size:13px;font-weight:700}
+.rx-box{background:var(--ink);color:#f5f0e8;padding:3px 7px;font-size:9px;white-space:nowrap}
+
+/* FOOTER */
+.footer{background:var(--ink2);color:#f5f0e8;display:flex;gap:8px;align-items:center;padding:2px 8px;border-top:2px solid var(--red);font-size:8px;letter-spacing:.05em}
+.fsb{padding:1px 6px;border:1px solid;font-size:7.5px}
+.fsb-r{border-color:var(--red);color:var(--red)}
+.fsb-g{border-color:#4caf50;color:#4caf50}
+.fsb-b{border-color:var(--blue2);color:var(--blue2)}
+.fsb-o{border-color:var(--orange2);color:var(--orange2)}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- HEADER -->
+<div class="hdr">
+  <div>
+    <div class="hdr-title">UMNG · LAB 5 · TANQUES ACOPLADOS</div>
+    <div class="hdr-sub">CONTROL DISCRETO – MQTT</div>
+  </div>
+  <div class="hdr-sep"></div>
+  <div class="hdr-badges">
+    <span class="hb hb-o" id="sb-mqtt">◉ MQTT DESCON.</span>
+    <span class="hb hb-b" id="sb-tank">CTRL: T1</span>
+    <span class="hb hb-g" id="sb-ts">Ts=0.050s | RX: 0</span>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- LEFT -->
+  <div class="left">
+
+    <div class="left-section">
+      <div class="sec-lbl">TANQUE A CONTROLAR</div>
+      <div class="cfg-row">
+        <button class="cfg-btn active-r" id="btnT1" onclick="selTank('T1')">T1</button>
+        <button class="cfg-btn"          id="btnT2" onclick="selTank('T2')">T2</button>
+      </div>
+    </div>
+
+    <div class="left-section">
+      <div class="sec-lbl">CONTROLADOR</div>
+      <div class="cfg-row">
+        <button class="cfg-btn active-r" id="btnCD" onclick="selCtrl('C->D')">C→D</button>
+        <button class="cfg-btn"          id="btnDD" onclick="selCtrl('D->D')">D→D</button>
+      </div>
+    </div>
+
+    <div class="left-section">
+      <div class="sec-lbl">BROKER MQTT</div>
+      <input class="inp" id="mqttHost" value="wss://ec982b74a6834204972e5d23ecf18792.s1.eu.hivemq.cloud:8884/mqtt">
+      <div class="inp-row">
+        <input class="inp-sm" id="mqttUser" placeholder="usuario">
+        <input class="inp-sm" id="mqttPass" type="password" placeholder="••••">
+      </div>
+      <input class="inp" id="mqttTopic" placeholder="tópico base" value="tanques/">
+    </div>
+
+    <div class="metrics-grid">
+      <div class="mtile"><div class="mt-lbl">ALTURA h1</div><div class="mt-val" id="mc-h1" style="color:var(--red2)">--</div><div class="mt-unit">cm</div></div>
+      <div class="mtile"><div class="mt-lbl">ALTURA h2</div><div class="mt-val" id="mc-h2" style="color:var(--blue2)">--</div><div class="mt-unit">cm</div></div>
+      <div class="mtile"><div class="mt-lbl">SETPOINT</div><div class="mt-val" id="mc-sp" style="color:var(--orange)">--</div><div class="mt-unit">cm</div></div>
+      <div class="mtile"><div class="mt-lbl">ERROR e(k)</div><div class="mt-val" id="mc-ek" style="color:var(--red)">--</div><div class="mt-unit">cm</div></div>
+      <div class="mtile"><div class="mt-lbl">u(k) DUTY</div><div class="mt-val" id="mc-u" style="color:var(--ink2)">--</div><div class="mt-unit">%</div></div>
+      <div class="mtile" style="border-color:var(--red2)"><div class="mt-lbl">ISE</div><div class="mt-val" id="mc-ise" style="color:var(--red2)">0.000</div></div>
+    </div>
+
+    <div class="sp-wrap">
+      <div class="sec-lbl">SETPOINT h₀ (cm)</div>
+      <div class="sp-row">
+        <input type="range" id="slSP" min="0" max="6" step="0.1" value="2.3">
+        <span class="sp-val" id="spVal">2.3</span>
+      </div>
+    </div>
+
+    <div class="act-grid">
+      <button class="abtn ab-g" onclick="doConnect()">CONECTAR</button>
+      <button class="abtn ab-b" onclick="doStart()">&gt;&gt; START</button>
+    </div>
+
+  </div>
+
+  <!-- CENTER -->
+  <div class="center">
+    <div class="plot-main">
+      <div class="plot-title-bar">
+        <span>Y(k) — NIVELES &amp; CONTROL</span>
+        <div class="plot-legend">
+          <div class="leg"><div class="leg-line" style="background:var(--red2)"></div>h1</div>
+          <div class="leg"><div class="leg-line" style="background:var(--blue2)"></div>h2</div>
+          <div class="leg"><div class="leg-line" style="background:var(--orange);border-top:2px dashed var(--orange)"></div>SP</div>
+          <div class="leg"><div class="leg-line" style="background:var(--ink3)"></div>u(%)</div>
+        </div>
+      </div>
+      <div class="plot-inner" style="top:18px">
+        <canvas id="chartNiv" style="width:100%;height:100%"></canvas>
+      </div>
+    </div>
+    <div class="plot-small">
+      <div class="plot-title-bar">
+        <span>e(k) — ERROR</span>
+        <div class="plot-legend">
+          <div class="leg"><div class="leg-line" style="background:var(--red)"></div>e(k)</div>
+          <div class="leg"><div class="leg-line" style="background:var(--ink3)"></div>ISE</div>
+        </div>
+      </div>
+      <div class="plot-inner" style="top:18px">
+        <canvas id="chartErr" style="width:100%;height:100%"></canvas>
+      </div>
+    </div>
+    <div class="tanks-row">
+      <div class="tank-cell"><canvas id="tank1" class="tc"></canvas></div>
+      <div class="tank-cell"><canvas id="tank2" class="tc"></canvas></div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Console -->
+  <div class="right">
+    <div class="con-wrap">
+      <div class="con-title">CONSOLA — <span style="color:var(--blue2)">MQTT</span></div>
+      <div class="console-box" id="consoleBox"></div>
+      <div class="ise-row">
+        <div class="ise-box"><span class="ise-lbl">ISE ACUM.</span><span class="ise-val" id="iseVal">0.000</span></div>
+        <div class="rx-box" id="rxBox">RX: 0</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- FOOTER -->
+<div class="footer">
+  <span class="fsb fsb-o" id="fsb-mqtt">◉ MQTT DESCONECTADO</span>
+  <span class="fsb fsb-b" id="fsb-tank">CTRL: T1</span>
+  <span style="margin-left:auto;font-size:7.5px;color:#b5a88a" id="fsb-ts">Ts=0.050s · 20Hz · RX:0</span>
+</div>
+
+</div>
+
+<script>
+const S={
+  tanque:'T1',ctrl:'C->D',
+  h1:0,h2:0,sp:2.3,ek:0,u:0,
+  distRaw:0,distFilt:0,d2Raw:0,d2Filt:0,
+  ovfS1:0,rxCount:0,iseAcum:0,ts:0.05,
+  running:false,mqttOk:false,
+  tHist:[],h1Hist:[],h2Hist:[],spHist:[],uHist:[],ekHist:[],iseHist:[],
+  N:600,tStart:0,wavePhase:0,
+  console:[],
+  client:null
+};
+
+function doConnect(){
+  const url=document.getElementById('mqttHost').value.trim();
+  const user=document.getElementById('mqttUser').value.trim();
+  const pass=document.getElementById('mqttPass').value.trim();
+  const opts={clientId:'umng_lab5_'+Math.random().toString(16).slice(2,8),reconnectPeriod:4000,connectTimeout:8000};
+  if(user)opts.username=user;
+  if(pass)opts.password=pass;
+  addLog('Conectando a '+url+'...','info');
+  try{
+    if(S.client)S.client.end(true);
+    S.client=mqtt.connect(url,opts);
+    S.client.on('connect',()=>{
+      S.mqttOk=true;S.running=true;S.tStart=performance.now()/1000;
+      const base=document.getElementById('mqttTopic').value.replace(/\/$/,'');
+      S.client.subscribe(base+'/#');
+      addLog('MQTT conectado. Suscrito a '+base+'/#','ok');
+      setSB('sb-mqtt','◉ MQTT CONECT.','hb-g');
+      setSB('fsb-mqtt','◉ MQTT CONECTADO','fsb-g');
+    });
+    S.client.on('message',(t,p)=>onMsg(t,p.toString()));
+    S.client.on('error',e=>{addLog('Error: '+e.message,'warn');setSB('sb-mqtt','◉ MQTT ERROR','hb-r');});
+    S.client.on('close',()=>{S.mqttOk=false;setSB('sb-mqtt','◉ MQTT DESCON.','hb-o');setSB('fsb-mqtt','◉ MQTT DESCONECTADO','fsb-o');});
+  }catch(e){addLog('ERR: '+e.message,'warn');}
+}
+
+function mqttPub(sub,msg){
+  if(!S.mqttOk||!S.client)return;
+  const base=document.getElementById('mqttTopic').value.replace(/\/$/,'');
+  S.client.publish(base+'/'+sub,String(msg));
+}
+
+function doStart(){mqttPub('cmd','start');addLog('>> start','cmd');}
+
+function parseESP32(line){
+  let c=line.trim();
+  if(c.startsWith('[')){const i=c.indexOf(']');if(i>=0)c=c.slice(i+1);}
+  c=c.replace(/=/g,':');
+  const p={};
+  c.split(',').forEach(t=>{t=t.trim();if(!t.includes(':'))return;const[k,v]=t.split(':',2);const n=parseFloat(v);if(!isNaN(n))p[k.trim()]=n;});
+  if(Object.keys(p).length<2)return false;
+  if('DistRaw'  in p)S.distRaw =+p.DistRaw.toFixed(3);
+  if('DistFilt' in p)S.distFilt=+p.DistFilt.toFixed(3);
+  if('D2Raw'    in p)S.d2Raw   =+p.D2Raw.toFixed(3);
+  if('D2Filt'   in p)S.d2Filt  =+p.D2Filt.toFixed(3);
+  const fb='Nivel'in p?+p.Nivel.toFixed(3):null;
+  S.h1='Altura1'in p?+p.Altura1.toFixed(3):(fb!==null?fb:S.h1);
+  S.h2='Altura2'in p?+p.Altura2.toFixed(3):(fb!==null?fb:S.h2);
+  if('SP'   in p)S.sp=+p.SP.toFixed(2);
+  if('Error'in p)S.ek=+p.Error.toFixed(4);
+  if('Duty' in p)S.u =+p.Duty.toFixed(2);
+  if('OVF_S1'in p)S.ovfS1=Math.round(p.OVF_S1);
+  return true;
+}
+
+function onMsg(topic,payload){
+  const base=document.getElementById('mqttTopic').value.replace(/\/$/,'');
+  if(topic.endsWith('/estado')||topic.endsWith('/raw')||topic===base){
+    if(parseESP32(payload)){S.rxCount++;recordSample();}
+  } else {
+    const sub=topic.replace(base+'/','');const v=parseFloat(payload);
+    if(!isNaN(v)){
+      if(sub==='sensor/nivel1'){S.h1=+v.toFixed(3);recordSample();S.rxCount++;}
+      if(sub==='sensor/nivel2')S.h2=+v.toFixed(3);
+      if(sub==='pid/output')   S.u =+v.toFixed(2);
+      if(sub==='pid/error')    S.ek=+v.toFixed(4);
+    }
+  }
+}
+
+function recordSample(){
+  const now=performance.now()/1000-S.tStart;
+  push(S.tHist,now);push(S.h1Hist,S.h1);push(S.h2Hist,S.h2);push(S.spHist,S.sp);
+  push(S.uHist,S.u);push(S.ekHist,S.ek);
+  S.iseAcum=+(S.iseAcum+S.ek*S.ek*S.ts).toFixed(4);push(S.iseHist,S.iseAcum);
+}
+function push(a,v){a.push(v);if(a.length>S.N)a.shift();}
+
+function selTank(t){
+  S.tanque=t;
+  ['T1','T2'].forEach(id=>{document.getElementById('btn'+id).className='cfg-btn'+(id===t?' active-r':'');});
+  document.getElementById('sb-tank').textContent='CTRL: '+t;
+  document.getElementById('fsb-tank').textContent='CTRL: '+t;
+  mqttPub('cmd',t.toLowerCase());
+  addLog('Tanque: '+t,'info');
+}
+
+function selCtrl(c){
+  S.ctrl=c;
+  ['CD','DD'].forEach((id,i)=>{document.getElementById('btn'+id).className='cfg-btn'+(['C->D','D->D'][i]===c?' active-r':'');});
+  addLog('Controlador: '+c,'info');
+}
+
+function setSB(id,txt,cls){
+  const el=document.getElementById(id);if(!el)return;
+  el.textContent=txt;
+  const base=id.startsWith('fsb')?'fsb':'hb';
+  el.className=base+' '+cls;
+}
+
+document.getElementById('slSP').addEventListener('input',function(){
+  S.sp=parseFloat(this.value);
+  document.getElementById('spVal').textContent=S.sp.toFixed(1);
+  mqttPub('pid/setpoint',S.sp.toFixed(2));
+  addLog(`SP → ${S.sp.toFixed(1)} cm`,'cmd');
+});
+
+function addLog(msg,type){
+  const ts=new Date().toTimeString().slice(0,8);
+  const cls=type==='cmd'?'con-log-cmd':type==='ok'?'con-log-ok':type==='warn'?'con-log-warn':'con-log-info';
+  S.console.push(`<span class="${cls}">[${ts}] ${msg}</span>`);
+  if(S.console.length>80)S.console.shift();
+  const box=document.getElementById('consoleBox');
+  box.innerHTML=S.console.slice(-22).join('<br>');
+  box.scrollTop=box.scrollHeight;
+}
+
+// Charts
+const COPT={responsive:true,maintainAspectRatio:false,animation:false,
+  plugins:{legend:{display:false}},
+  scales:{
+    x:{ticks:{color:'#6b5e44',font:{family:'Share Tech Mono',size:8},maxTicksLimit:8,maxRotation:0},
+       grid:{color:'rgba(200,191,170,.5)'},border:{color:'#8a7a5e'}},
+    y:{ticks:{color:'#6b5e44',font:{family:'Share Tech Mono',size:8}},
+       grid:{color:'rgba(200,191,170,.5)'},border:{color:'#8a7a5e'}}
+  }};
+
+const ctxNiv=document.getElementById('chartNiv').getContext('2d');
+const ctxErr=document.getElementById('chartErr').getContext('2d');
+
+const chartNiv=new Chart(ctxNiv,{type:'line',data:{labels:[],datasets:[
+  {label:'h1',data:[],borderColor:'#c0392b',borderWidth:2,tension:.35,pointRadius:0,fill:false},
+  {label:'h2',data:[],borderColor:'#2980b9',borderWidth:2,tension:.35,pointRadius:0,fill:false},
+  {label:'SP',data:[],borderColor:'#b5470f',borderWidth:1.5,borderDash:[6,3],tension:0,pointRadius:0,fill:false},
+  {label:'u', data:[],borderColor:'#6b5e44',borderWidth:1,tension:.3,pointRadius:0,fill:false,yAxisID:'y2'}
+]},options:{...JSON.parse(JSON.stringify(COPT)),
+  scales:{x:{...COPT.scales.x},
+    y:{...COPT.scales.y,min:-0.2,max:6.5,ticks:{...COPT.scales.y.ticks,callback:v=>v+'cm'}},
+    y2:{position:'right',min:0,max:105,ticks:{color:'#6b5e44',font:{family:'Share Tech Mono',size:7},callback:v=>v+'%'},grid:{display:false},border:{color:'#8a7a5e'}}
+  }}});
+
+const chartErr=new Chart(ctxErr,{type:'line',data:{labels:[],datasets:[
+  {label:'e(k)',data:[],borderColor:'#c0392b',borderWidth:1.5,tension:.3,pointRadius:0,fill:false},
+  {label:'ISE', data:[],borderColor:'#3d3320',borderWidth:1.5,tension:.3,pointRadius:0,fill:false,yAxisID:'y2'}
+]},options:{...JSON.parse(JSON.stringify(COPT)),
+  scales:{x:{...COPT.scales.x},
+    y:{...COPT.scales.y,ticks:{...COPT.scales.y.ticks,callback:v=>v.toFixed(2)}},
+    y2:{position:'right',ticks:{color:'#3d3320',font:{family:'Share Tech Mono',size:7}},grid:{display:false},border:{color:'#8a7a5e'}}
+  }}});
+
+// Tank drawing
+const H_MAX=6.0;
+function drawTank(cid,hPct,spPct,wavePhase,wCol,title,tCol,isTank1){
+  const canvas=document.getElementById(cid);
+  const W=canvas.offsetWidth,H=canvas.offsetHeight;
+  canvas.width=W;canvas.height=H;
+  const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#f5f0e8';ctx.fillRect(0,0,W,H);
+  const TL=W*.22,TR=W*.78,TB=H*.08,TT=H*.88;
+  const tH=TT-TB,tW=TR-TL,h=Math.max(0,Math.min(hPct,1));
+  const wTop=TT-tH*h;
+  ctx.strokeStyle=isTank1&&S.ovfS1?'#c0392b':'#3d3320';ctx.lineWidth=1.5;
+  ctx.fillStyle='#ede8de';
+  ctx.beginPath();ctx.rect(TL,TB,tW,tH);ctx.fill();ctx.stroke();
+  if(h>.004){
+    const amp=Math.min(h,.25)*4+1.5;
+    ctx.beginPath();
+    for(let i=0;i<=60;i++){const x=TL+(tW*i/60);const y=wTop+amp*Math.sin(3*Math.PI*(i/60)*2+wavePhase);i?ctx.lineTo(x,y):ctx.moveTo(x,y);}
+    ctx.lineTo(TR,TT);ctx.lineTo(TL,TT);ctx.closePath();
+    ctx.fillStyle=wCol;ctx.fill();
+    ctx.beginPath();
+    for(let i=0;i<=60;i++){const x=TL+(tW*i/60);const y=wTop+amp*Math.sin(3*Math.PI*(i/60)*2+wavePhase);i?ctx.lineTo(x,y):ctx.moveTo(x,y);}
+    ctx.strokeStyle='rgba(255,255,255,.35)';ctx.lineWidth=1;ctx.stroke();
+  }
+  if(spPct>0){
+    const spY=TT-tH*Math.min(spPct,1);
+    ctx.setLineDash([4,3]);ctx.strokeStyle='#b5470f';ctx.lineWidth=1.2;
+    ctx.beginPath();ctx.moveTo(TL+2,spY);ctx.lineTo(TR-2,spY);ctx.stroke();
+    ctx.setLineDash([]);ctx.fillStyle='#b5470f';ctx.font='bold 7px Share Tech Mono';
+    ctx.fillText('SP',TR+2,spY+3);
+  }
+  ctx.fillStyle='#8a7a5e';ctx.font='7px Share Tech Mono';
+  [[.25,1.5],[.5,3.0],[.75,4.5]].forEach(([pct,val])=>{
+    const my=TB+tH*(1-pct);
+    ctx.strokeStyle='#8a7a5e';ctx.lineWidth=.7;
+    ctx.beginPath();ctx.moveTo(TL-5,my);ctx.lineTo(TL+2,my);ctx.stroke();
+    ctx.fillText(val.toFixed(1),TL-19,my+3);
+  });
+  ctx.fillStyle=tCol;ctx.font='bold 8px Share Tech Mono';ctx.textAlign='center';
+  ctx.fillText(title,W/2,H*.04+8);
+  ctx.font='7px Share Tech Mono';ctx.textAlign='left';
+  if(isTank1){
+    ctx.fillStyle='#c0392b';ctx.fillText(`h1=${S.h1.toFixed(2)}cm`,2,H*.3);
+    ctx.fillStyle='#3d3320';ctx.fillText(`u=${S.u.toFixed(0)}%`,2,H*.42);
+    ctx.textAlign='right';ctx.fillStyle='#b5470f';ctx.fillText(`e=${S.ek.toFixed(2)}`,W-2,H*.3);
+    if(S.ovfS1){ctx.fillStyle='#c0392b';ctx.font='bold 11px Share Tech Mono';ctx.textAlign='center';ctx.fillText('OVERFLOW',W/2,H*.58);}
+  } else {
+    ctx.fillStyle='#2980b9';ctx.fillText(`h2=${S.h2.toFixed(2)}cm`,2,H*.3);
+    ctx.fillStyle='#3d3320';ctx.fillText(`dRaw=${S.d2Raw.toFixed(2)}`,2,H*.42);
+    ctx.textAlign='right';ctx.fillStyle='#6b5e44';ctx.fillText(`dFlt=${S.d2Filt.toFixed(2)}`,W-2,H*.3);
+  }
+  ctx.textAlign='center';ctx.fillStyle='#b5a88a';ctx.font='6.5px Share Tech Mono';
+  ctx.fillText('acoplamiento hidraulico',W/2,H*.98);
+}
+
+function updateCharts(){
+  if(S.tHist.length<2)return;
+  const WIN=60,t=S.tHist,tLast=t[t.length-1],tMin=Math.max(0,tLast-WIN);
+  const labels=t.filter(v=>v>=tMin).map(v=>v.toFixed(1));
+  const idx=t.findIndex(v=>v>=tMin);
+  const sl=a=>a.slice(idx);
+  chartNiv.data.labels=labels;
+  chartNiv.data.datasets[0].data=sl(S.h1Hist);
+  chartNiv.data.datasets[1].data=sl(S.h2Hist);
+  chartNiv.data.datasets[2].data=sl(S.spHist);
+  chartNiv.data.datasets[3].data=sl(S.uHist);
+  chartNiv.update('none');
+  chartErr.data.labels=labels;
+  chartErr.data.datasets[0].data=sl(S.ekHist);
+  chartErr.data.datasets[1].data=sl(S.iseHist);
+  chartErr.options.scales.y.min=-10;chartErr.options.scales.y.max=10;
+  chartErr.update('none');
+}
+
+function updateUI(){
+  S.wavePhase+=0.16;
+  drawTank('tank1',S.h1/H_MAX,S.sp/H_MAX,S.wavePhase,'rgba(192,57,43,.6)','T1 ENTRADA','#c0392b',true);
+  drawTank('tank2',S.h2/H_MAX,S.sp/H_MAX,S.wavePhase+1.2,'rgba(41,128,185,.55)','T2 SALIDA','#2980b9',false);
+  const fmt=(v,d=2)=>isNaN(v)?'--':v.toFixed(d);
+  document.getElementById('mc-h1').textContent=fmt(S.h1);
+  document.getElementById('mc-h2').textContent=fmt(S.h2);
+  document.getElementById('mc-sp').textContent=fmt(S.sp,1);
+  document.getElementById('mc-ek').textContent=fmt(S.ek);
+  document.getElementById('mc-u').textContent=fmt(S.u);
+  document.getElementById('mc-ise').textContent=fmt(S.iseAcum,3);
+  document.getElementById('iseVal').textContent=fmt(S.iseAcum,3);
+  document.getElementById('rxBox').textContent='RX: '+S.rxCount;
+  const tsText=`Ts=${S.ts.toFixed(3)}s · ${Math.round(1/S.ts)}Hz · RX:${S.rxCount}`;
+  document.getElementById('sb-ts').textContent=tsText;
+  document.getElementById('fsb-ts').textContent=tsText;
+  updateCharts();
+}
+setInterval(updateUI,150);
+
+addLog('UMNG Lab 5 — Tanques Acoplados','ok');
+addLog('Configura el broker MQTT y presiona CONECTAR','info');
+</script>
+</body>
+</html>
