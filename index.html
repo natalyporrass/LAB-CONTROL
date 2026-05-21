@@ -50,7 +50,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
 .inp-row{display:flex;gap:3px}
 .inp-sm{width:50%;background:var(--panel2);border:1px solid var(--border2);color:var(--ink);font-family:'Share Tech Mono',monospace;font-size:8px;padding:2px 4px}
 
-/* metrics */
+/* metrics — sin h1, cuadrícula de 1 columna para las que quedan o 2 col adaptadas */
 .metrics-grid{display:grid;grid-template-columns:1fr 1fr;gap:3px;padding:5px 7px}
 .mtile{background:var(--panel2);border:1px solid var(--border3);padding:3px 5px}
 .mt-lbl{font-size:7px;color:var(--ink3);letter-spacing:.06em}
@@ -79,9 +79,10 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
 .plot-legend{display:flex;gap:8px}
 .leg{display:flex;align-items:center;gap:3px;font-size:7px}
 .leg-line{width:14px;height:2px}
+
+/* Solo tanque 2 */
 .tanks-row{display:flex;border-top:2px solid var(--border);height:22%}
-.tank-cell{flex:1;border-right:1px solid var(--border3);position:relative;overflow:hidden}
-.tank-cell:last-child{border-right:none}
+.tank-cell{flex:1;position:relative;overflow:hidden}
 canvas.tc{width:100%;height:100%;display:block}
 
 /* RIGHT */
@@ -132,14 +133,6 @@ canvas.tc{width:100%;height:100%;display:block}
   <div class="left">
 
     <div class="left-section">
-      <div class="sec-lbl">TANQUE A CONTROLAR</div>
-      <div class="cfg-row">
-        <button class="cfg-btn active-r" id="btnT1" onclick="selTank('T1')">T1</button>
-        <button class="cfg-btn"          id="btnT2" onclick="selTank('T2')">T2</button>
-      </div>
-    </div>
-
-    <div class="left-section">
       <div class="sec-lbl">CONTROLADOR</div>
       <div class="cfg-row">
         <button class="cfg-btn active-r" id="btnCD" onclick="selCtrl('C->D')">C→D</button>
@@ -157,9 +150,9 @@ canvas.tc{width:100%;height:100%;display:block}
       <input class="inp" id="mqttTopic" placeholder="tópico base" value="tanques/">
     </div>
 
+    <!-- Métricas sin h1 -->
     <div class="metrics-grid">
-      <div class="mtile"><div class="mt-lbl">ALTURA h1</div><div class="mt-val" id="mc-h1" style="color:var(--red2)">--</div><div class="mt-unit">cm</div></div>
-      <div class="mtile"><div class="mt-lbl">ALTURA h2</div><div class="mt-val" id="mc-h2" style="color:var(--blue2)">--</div><div class="mt-unit">cm</div></div>
+      <div class="mtile" style="grid-column:1/-1"><div class="mt-lbl">ALTURA h2</div><div class="mt-val" id="mc-h2" style="color:var(--blue2)">--</div><div class="mt-unit">cm</div></div>
       <div class="mtile"><div class="mt-lbl">SETPOINT</div><div class="mt-val" id="mc-sp" style="color:var(--orange)">--</div><div class="mt-unit">cm</div></div>
       <div class="mtile"><div class="mt-lbl">ERROR e(k)</div><div class="mt-val" id="mc-ek" style="color:var(--red)">--</div><div class="mt-unit">cm</div></div>
       <div class="mtile"><div class="mt-lbl">u(k) DUTY</div><div class="mt-val" id="mc-u" style="color:var(--ink2)">--</div><div class="mt-unit">%</div></div>
@@ -187,7 +180,6 @@ canvas.tc{width:100%;height:100%;display:block}
       <div class="plot-title-bar">
         <span>Y(k) — NIVELES &amp; CONTROL</span>
         <div class="plot-legend">
-          <div class="leg"><div class="leg-line" style="background:var(--red2)"></div>h1</div>
           <div class="leg"><div class="leg-line" style="background:var(--blue2)"></div>h2</div>
           <div class="leg"><div class="leg-line" style="background:var(--orange);border-top:2px dashed var(--orange)"></div>SP</div>
           <div class="leg"><div class="leg-line" style="background:var(--ink3)"></div>u(%)</div>
@@ -209,8 +201,8 @@ canvas.tc{width:100%;height:100%;display:block}
         <canvas id="chartErr" style="width:100%;height:100%"></canvas>
       </div>
     </div>
+    <!-- Solo tanque 2 -->
     <div class="tanks-row">
-      <div class="tank-cell"><canvas id="tank1" class="tc"></canvas></div>
       <div class="tank-cell"><canvas id="tank2" class="tc"></canvas></div>
     </div>
   </div>
@@ -245,7 +237,7 @@ const S={
   distRaw:0,distFilt:0,d2Raw:0,d2Filt:0,
   ovfS1:0,rxCount:0,iseAcum:0,ts:0.05,
   running:false,mqttOk:false,
-  tHist:[],h1Hist:[],h2Hist:[],spHist:[],uHist:[],ekHist:[],iseHist:[],
+  tHist:[],h2Hist:[],spHist:[],uHist:[],ekHist:[],iseHist:[],
   N:600,tStart:0,wavePhase:0,
   console:[],
   client:null
@@ -312,8 +304,7 @@ function onMsg(topic,payload){
   } else {
     const sub=topic.replace(base+'/','');const v=parseFloat(payload);
     if(!isNaN(v)){
-      if(sub==='sensor/nivel1'){S.h1=+v.toFixed(3);recordSample();S.rxCount++;}
-      if(sub==='sensor/nivel2')S.h2=+v.toFixed(3);
+      if(sub==='sensor/nivel2'){S.h2=+v.toFixed(3);recordSample();S.rxCount++;}
       if(sub==='pid/output')   S.u =+v.toFixed(2);
       if(sub==='pid/error')    S.ek=+v.toFixed(4);
     }
@@ -322,20 +313,11 @@ function onMsg(topic,payload){
 
 function recordSample(){
   const now=performance.now()/1000-S.tStart;
-  push(S.tHist,now);push(S.h1Hist,S.h1);push(S.h2Hist,S.h2);push(S.spHist,S.sp);
+  push(S.tHist,now);push(S.h2Hist,S.h2);push(S.spHist,S.sp);
   push(S.uHist,S.u);push(S.ekHist,S.ek);
   S.iseAcum=+(S.iseAcum+S.ek*S.ek*S.ts).toFixed(4);push(S.iseHist,S.iseAcum);
 }
 function push(a,v){a.push(v);if(a.length>S.N)a.shift();}
-
-function selTank(t){
-  S.tanque=t;
-  ['T1','T2'].forEach(id=>{document.getElementById('btn'+id).className='cfg-btn'+(id===t?' active-r':'');});
-  document.getElementById('sb-tank').textContent='CTRL: '+t;
-  document.getElementById('fsb-tank').textContent='CTRL: '+t;
-  mqttPub('cmd',t.toLowerCase());
-  addLog('Tanque: '+t,'info');
-}
 
 function selCtrl(c){
   S.ctrl=c;
@@ -381,7 +363,6 @@ const ctxNiv=document.getElementById('chartNiv').getContext('2d');
 const ctxErr=document.getElementById('chartErr').getContext('2d');
 
 const chartNiv=new Chart(ctxNiv,{type:'line',data:{labels:[],datasets:[
-  {label:'h1',data:[],borderColor:'#c0392b',borderWidth:2,tension:.35,pointRadius:0,fill:false},
   {label:'h2',data:[],borderColor:'#2980b9',borderWidth:2,tension:.35,pointRadius:0,fill:false},
   {label:'SP',data:[],borderColor:'#b5470f',borderWidth:1.5,borderDash:[6,3],tension:0,pointRadius:0,fill:false},
   {label:'u', data:[],borderColor:'#6b5e44',borderWidth:1,tension:.3,pointRadius:0,fill:false,yAxisID:'y2'}
@@ -400,10 +381,10 @@ const chartErr=new Chart(ctxErr,{type:'line',data:{labels:[],datasets:[
     y2:{position:'right',ticks:{color:'#3d3320',font:{family:'Share Tech Mono',size:7}},grid:{display:false},border:{color:'#8a7a5e'}}
   }}});
 
-// Tank drawing
+// Tank drawing — solo tanque 2
 const H_MAX=6.0;
-function drawTank(cid,hPct,spPct,wavePhase,wCol,title,tCol,isTank1){
-  const canvas=document.getElementById(cid);
+function drawTank2(hPct,spPct,wavePhase){
+  const canvas=document.getElementById('tank2');
   const W=canvas.offsetWidth,H=canvas.offsetHeight;
   canvas.width=W;canvas.height=H;
   const ctx=canvas.getContext('2d');
@@ -412,7 +393,7 @@ function drawTank(cid,hPct,spPct,wavePhase,wCol,title,tCol,isTank1){
   const TL=W*.22,TR=W*.78,TB=H*.08,TT=H*.88;
   const tH=TT-TB,tW=TR-TL,h=Math.max(0,Math.min(hPct,1));
   const wTop=TT-tH*h;
-  ctx.strokeStyle=isTank1&&S.ovfS1?'#c0392b':'#3d3320';ctx.lineWidth=1.5;
+  ctx.strokeStyle='#3d3320';ctx.lineWidth=1.5;
   ctx.fillStyle='#ede8de';
   ctx.beginPath();ctx.rect(TL,TB,tW,tH);ctx.fill();ctx.stroke();
   if(h>.004){
@@ -420,7 +401,7 @@ function drawTank(cid,hPct,spPct,wavePhase,wCol,title,tCol,isTank1){
     ctx.beginPath();
     for(let i=0;i<=60;i++){const x=TL+(tW*i/60);const y=wTop+amp*Math.sin(3*Math.PI*(i/60)*2+wavePhase);i?ctx.lineTo(x,y):ctx.moveTo(x,y);}
     ctx.lineTo(TR,TT);ctx.lineTo(TL,TT);ctx.closePath();
-    ctx.fillStyle=wCol;ctx.fill();
+    ctx.fillStyle='rgba(41,128,185,.55)';ctx.fill();
     ctx.beginPath();
     for(let i=0;i<=60;i++){const x=TL+(tW*i/60);const y=wTop+amp*Math.sin(3*Math.PI*(i/60)*2+wavePhase);i?ctx.lineTo(x,y):ctx.moveTo(x,y);}
     ctx.strokeStyle='rgba(255,255,255,.35)';ctx.lineWidth=1;ctx.stroke();
@@ -439,19 +420,12 @@ function drawTank(cid,hPct,spPct,wavePhase,wCol,title,tCol,isTank1){
     ctx.beginPath();ctx.moveTo(TL-5,my);ctx.lineTo(TL+2,my);ctx.stroke();
     ctx.fillText(val.toFixed(1),TL-19,my+3);
   });
-  ctx.fillStyle=tCol;ctx.font='bold 8px Share Tech Mono';ctx.textAlign='center';
-  ctx.fillText(title,W/2,H*.04+8);
+  ctx.fillStyle='#2980b9';ctx.font='bold 8px Share Tech Mono';ctx.textAlign='center';
+  ctx.fillText('T2 SALIDA',W/2,H*.04+8);
   ctx.font='7px Share Tech Mono';ctx.textAlign='left';
-  if(isTank1){
-    ctx.fillStyle='#c0392b';ctx.fillText(`h1=${S.h1.toFixed(2)}cm`,2,H*.3);
-    ctx.fillStyle='#3d3320';ctx.fillText(`u=${S.u.toFixed(0)}%`,2,H*.42);
-    ctx.textAlign='right';ctx.fillStyle='#b5470f';ctx.fillText(`e=${S.ek.toFixed(2)}`,W-2,H*.3);
-    if(S.ovfS1){ctx.fillStyle='#c0392b';ctx.font='bold 11px Share Tech Mono';ctx.textAlign='center';ctx.fillText('OVERFLOW',W/2,H*.58);}
-  } else {
-    ctx.fillStyle='#2980b9';ctx.fillText(`h2=${S.h2.toFixed(2)}cm`,2,H*.3);
-    ctx.fillStyle='#3d3320';ctx.fillText(`dRaw=${S.d2Raw.toFixed(2)}`,2,H*.42);
-    ctx.textAlign='right';ctx.fillStyle='#6b5e44';ctx.fillText(`dFlt=${S.d2Filt.toFixed(2)}`,W-2,H*.3);
-  }
+  ctx.fillStyle='#2980b9';ctx.fillText(`h2=${S.h2.toFixed(2)}cm`,2,H*.3);
+  ctx.fillStyle='#3d3320';ctx.fillText(`dRaw=${S.d2Raw.toFixed(2)}`,2,H*.42);
+  ctx.textAlign='right';ctx.fillStyle='#6b5e44';ctx.fillText(`dFlt=${S.d2Filt.toFixed(2)}`,W-2,H*.3);
   ctx.textAlign='center';ctx.fillStyle='#b5a88a';ctx.font='6.5px Share Tech Mono';
   ctx.fillText('acoplamiento hidraulico',W/2,H*.98);
 }
@@ -463,10 +437,9 @@ function updateCharts(){
   const idx=t.findIndex(v=>v>=tMin);
   const sl=a=>a.slice(idx);
   chartNiv.data.labels=labels;
-  chartNiv.data.datasets[0].data=sl(S.h1Hist);
-  chartNiv.data.datasets[1].data=sl(S.h2Hist);
-  chartNiv.data.datasets[2].data=sl(S.spHist);
-  chartNiv.data.datasets[3].data=sl(S.uHist);
+  chartNiv.data.datasets[0].data=sl(S.h2Hist);
+  chartNiv.data.datasets[1].data=sl(S.spHist);
+  chartNiv.data.datasets[2].data=sl(S.uHist);
   chartNiv.update('none');
   chartErr.data.labels=labels;
   chartErr.data.datasets[0].data=sl(S.ekHist);
@@ -477,10 +450,8 @@ function updateCharts(){
 
 function updateUI(){
   S.wavePhase+=0.16;
-  drawTank('tank1',S.h1/H_MAX,S.sp/H_MAX,S.wavePhase,'rgba(192,57,43,.6)','T1 ENTRADA','#c0392b',true);
-  drawTank('tank2',S.h2/H_MAX,S.sp/H_MAX,S.wavePhase+1.2,'rgba(41,128,185,.55)','T2 SALIDA','#2980b9',false);
+  drawTank2(S.h2/H_MAX,S.sp/H_MAX,S.wavePhase+1.2);
   const fmt=(v,d=2)=>isNaN(v)?'--':v.toFixed(d);
-  document.getElementById('mc-h1').textContent=fmt(S.h1);
   document.getElementById('mc-h2').textContent=fmt(S.h2);
   document.getElementById('mc-sp').textContent=fmt(S.sp,1);
   document.getElementById('mc-ek').textContent=fmt(S.ek);
